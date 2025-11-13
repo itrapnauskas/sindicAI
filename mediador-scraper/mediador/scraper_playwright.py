@@ -135,41 +135,52 @@ def worker_playwright(uf: str, tipo_codigo: str) -> None:
             page.goto(BASE_URL, wait_until="networkidle", timeout=TIMEOUT * 1000)
             time.sleep(2)  # Aguardar JS carregar
 
-            # Preencher formulário
-            # NOTA: Seletores precisam ser ajustados conforme HTML real do site
-            # Aqui estamos usando seletores genéricos que provavelmente precisarão de ajuste
+            # Preencher formulário com seletores corretos do site Mediador
+            # Descobertos via inspect_site.py
+
+            # Mapear tipo_codigo para texto que aparece no select
+            tipo_map = {
+                "1": "Convenção\n                                                Coletiva",  # CCT
+                "2": "Acordo\n                                                Coletivo",     # ACT
+                "3": "Todos os Tipos"  # Para aditivos, usar "Todos"
+            }
+            tipo_label = tipo_map.get(tipo_codigo, "Todos os Tipos")
 
             try:
-                # Selecionar UF
-                page.select_option("select[name*='uf'], select[id*='uf'], select[id*='UF']", uf)
+                # Selecionar UF de Registro (id correto: cboUFRegistro)
+                page.select_option("#cboUFRegistro", uf)
+                print(f"[{human_time()}] ✅ UF selecionada: {uf}")
             except Exception as e:
                 print(f"[{human_time()}] ⚠️  Erro ao selecionar UF: {e}")
 
             try:
-                # Selecionar tipo de instrumento
-                page.select_option(
-                    "select[name*='tipo'], select[name*='Tipo'], select[id*='tipo']",
-                    tipo_codigo
-                )
+                # Selecionar tipo de instrumento (id correto: cboTPRequerimento)
+                page.select_option("#cboTPRequerimento", label=tipo_label)
+                print(f"[{human_time()}] ✅ Tipo selecionado: {tipo_label.strip()}")
             except Exception as e:
                 print(f"[{human_time()}] ⚠️  Erro ao selecionar tipo: {e}")
 
             try:
-                # Preencher data inicial
-                page.fill("input[name*='dataIni'], input[name*='dtIni'], input[id*='dataIni']", DATA_INICIO)
-            except Exception as e:
-                print(f"[{human_time()}] ⚠️  Erro ao preencher data inicial: {e}")
+                # Marcar checkbox de Período de Registro (necessário para habilitar campos de data!)
+                page.check("#chkPeriodoRegistro")
+                page.wait_for_timeout(500)  # Aguardar campos habilitarem
+                print(f"[{human_time()}] ✅ Checkbox de período marcado")
 
-            try:
-                # Preencher data final
+                # Preencher data inicial de registro
+                page.fill("#txtDTInicioRegistro", DATA_INICIO)
+                print(f"[{human_time()}] ✅ Data início preenchida: {DATA_INICIO}")
+
+                # Preencher data final de registro
                 data_fim = dt.date.today().strftime("%d/%m/%Y")
-                page.fill("input[name*='dataFim'], input[name*='dtFim'], input[id*='dataFim']", data_fim)
+                page.fill("#txtDTFimRegistro", data_fim)
+                print(f"[{human_time()}] ✅ Data fim preenchida: {data_fim}")
             except Exception as e:
-                print(f"[{human_time()}] ⚠️  Erro ao preencher data final: {e}")
+                print(f"[{human_time()}] ⚠️  Erro ao preencher datas: {e}")
 
             # Clicar em pesquisar
             try:
-                page.click("button:has-text('Pesquisar'), input[type='submit'][value*='Pesquis']")
+                page.click("#btnPesquisar")
+                print(f"[{human_time()}] ✅ Botão Pesquisar clicado")
                 page.wait_for_load_state("networkidle", timeout=TIMEOUT * 1000)
                 time.sleep(2)
             except Exception as e:
