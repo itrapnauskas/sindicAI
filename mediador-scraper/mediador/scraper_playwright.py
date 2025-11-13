@@ -131,20 +131,33 @@ def worker_playwright(uf: str, tipo_codigo: str) -> None:
         page = context.new_page()
 
         try:
-            # Navegar para página de consulta
-            page.goto(BASE_URL, wait_until="networkidle", timeout=TIMEOUT * 1000)
-            time.sleep(2)  # Aguardar JS carregar
+            # Navegar para página de consulta (site pode estar lento)
+            print(f"[{human_time()}] 🌐 Navegando para {BASE_URL}...")
+            page.goto(BASE_URL, wait_until="load", timeout=180000)  # 3 minutos
+            print(f"[{human_time()}] ✅ Página carregada, aguardando estabilização...")
+            page.wait_for_timeout(3000)  # Aguardar JS carregar
 
             # Preencher formulário com seletores corretos do site Mediador
             # Descobertos via inspect_site.py
 
-            # Mapear tipo_codigo para texto que aparece no select
-            tipo_map = {
-                "1": "Convenção\n                                                Coletiva",  # CCT
-                "2": "Acordo\n                                                Coletivo",     # ACT
-                "3": "Todos os Tipos"  # Para aditivos, usar "Todos"
+            # Mapear tipo_codigo para INDEX no select (mais confiável que label)
+            # Índices descobertos via inspect_site.py:
+            # 0 = "Todos os Tipos"
+            # 1 = "Acordo Coletivo" (ACT)
+            # 2 = "Acordo Coletivo Específico - PPE"
+            # 3 = "Acordo Coletivo Específico - Domingos"
+            # 4 = "Convenção Coletiva" (CCT)
+            tipo_index_map = {
+                "1": 4,  # CCT
+                "2": 1,  # ACT
+                "3": 0   # Todos (para pegar aditivos)
             }
-            tipo_label = tipo_map.get(tipo_codigo, "Todos os Tipos")
+            tipo_index = tipo_index_map.get(tipo_codigo, 0)
+            tipo_nomes = {
+                "1": "Convenção Coletiva (CCT)",
+                "2": "Acordo Coletivo (ACT)",
+                "3": "Todos os Tipos (Aditivos)"
+            }
 
             try:
                 # Selecionar UF de Registro (id correto: cboUFRegistro)
@@ -154,9 +167,9 @@ def worker_playwright(uf: str, tipo_codigo: str) -> None:
                 print(f"[{human_time()}] ⚠️  Erro ao selecionar UF: {e}")
 
             try:
-                # Selecionar tipo de instrumento (id correto: cboTPRequerimento)
-                page.select_option("#cboTPRequerimento", label=tipo_label)
-                print(f"[{human_time()}] ✅ Tipo selecionado: {tipo_label.strip()}")
+                # Selecionar tipo de instrumento por ÍNDICE (mais confiável)
+                page.select_option("#cboTPRequerimento", index=tipo_index)
+                print(f"[{human_time()}] ✅ Tipo selecionado: {tipo_nomes.get(tipo_codigo, 'Desconhecido')} (index {tipo_index})")
             except Exception as e:
                 print(f"[{human_time()}] ⚠️  Erro ao selecionar tipo: {e}")
 
