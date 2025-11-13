@@ -196,6 +196,22 @@ sindicAI/
 
 ## 🚀 COMO RODAR O SCRAPER (MVP ATUAL)
 
+### ⚠️ Requisitos de Ambiente
+
+**IMPORTANTE**: O scraper precisa de **acesso irrestrito à internet**:
+
+- ✅ Acesso a `https://www3.mte.gov.br/sistemas/mediador/*`
+- ✅ Acesso a Azure CDN para baixar Chromium
+- ✅ 500 GB de espaço em disco (para coleta completa)
+- ✅ 4+ GB de RAM, 8 GB recomendado
+
+**Ambientes que NÃO funcionam**:
+- ❌ Redes corporativas com firewall restritivo
+- ❌ Sandboxes sem acesso externo
+- ❌ Ambientes com whitelist de domínios
+
+👉 **Ver detalhes completos**: [mediador-scraper/ENVIRONMENT.md](mediador-scraper/ENVIRONMENT.md)
+
 ### Setup Inicial
 
 ```bash
@@ -205,18 +221,18 @@ cd sindicAI/mediador-scraper
 
 # 2. Instalar dependências
 pip install -r requirements.txt
-playwright install chromium
+python -m playwright install chromium --with-deps
 
 # 3. Configurar ambiente (opcional)
 cp .env.example .env
 # Editar .env se necessário (ex: DATA_ROOT=/mnt/storage/mediador)
 
-# 4. Testar com uma UF
-python -m scripts.run_single_uf --uf SC --tipo 1 --max-paginas 2
+# 4. Testar com uma UF (usando Playwright)
+python test_acre_playwright.py
 
 # 5. Executar coleta completa (CUIDADO: 300GB!)
-tmux new -s nuclear
-python -m mediador.scraper_nuclear
+tmux new -s mediador
+python -m mediador.scraper_playwright
 ```
 
 ### Monitoramento
@@ -377,6 +393,24 @@ session.get(url, verify=False)
 ```bash
 playwright install chromium
 ```
+
+### Erro: "403 Forbidden" ao acessar Mediador
+
+**Causa**: Proteção anti-bot, firewall corporativo, ou ambiente sandbox.
+
+**Solução**:
+1. Usar Playwright (browser real) ao invés de requests
+2. Rodar em ambiente com acesso livre à internet (VPS, máquina local)
+3. Verificar se site está online: `curl https://www3.mte.gov.br`
+
+### Erro: "Failed to download Chromium"
+
+**Causa**: Firewall bloqueando Azure CDN.
+
+**Solução**:
+1. Liberar domínios `*.azureedge.net`
+2. Rodar em ambiente sem restrições
+3. Ver: [ENVIRONMENT.md](mediador-scraper/ENVIRONMENT.md)
 
 ### Scraper muito lento
 1. Aumentar `MAX_WORKERS` (cuidado com rate limiting)
