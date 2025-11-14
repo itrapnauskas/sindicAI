@@ -39,28 +39,48 @@ def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def parse_lista(html: str, tipo_codigo: str) -> list[dict]:
+def parse_lista(html: str, tipo_codigo: str, debug_save=False) -> list[dict]:
     """
     Parseia HTML da página de listagem e extrai instrumentos.
     """
     soup = BeautifulSoup(html, "lxml")
 
+    # DEBUG: Contar quantas tabelas existem
+    all_tables = soup.find_all("table")
+
     # Encontrar tabela de resultados - tentar vários seletores
     table = (
         soup.find("table", {"class": "table-striped"}) or
         soup.find("table", {"class": "table"}) or
-        soup.find("table")
+        soup.find("table", {"id": lambda x: x and "grid" in x.lower()}) or
+        soup.find("table", {"id": lambda x: x and "result" in x.lower()}) or
+        (all_tables[-1] if all_tables else None)  # Última tabela (geralmente é a de resultados)
     )
 
     if not table:
+        print(f"[DEBUG] ⚠️  Nenhuma tabela encontrada! Total de tables na página: {len(all_tables)}")
+        if debug_save:
+            Path("debug_no_table.html").write_text(html, encoding="utf-8")
+            print(f"[DEBUG] 💾 HTML salvo em: debug_no_table.html")
         return []
 
-    rows = table.find_all("tr")[1:]  # Pular header
+    rows = table.find_all("tr")
+    print(f"[DEBUG] 📊 Tabela encontrada com {len(rows)} linhas (id={table.get('id', 'N/A')}, class={table.get('class', [])})")
+
+    # Pular header (primeira linha)
+    data_rows = rows[1:] if len(rows) > 1 else rows
     instrumentos = []
 
-    for tr in rows:
+    for i, tr in enumerate(data_rows):
         cols = tr.find_all("td")
+
+        # DEBUG: Mostrar primeiras linhas
+        if i < 2:
+            print(f"[DEBUG] Linha {i+1}: {len(cols)} colunas - {[c.get_text(strip=True)[:30] for c in cols[:3]]}")
+
         if len(cols) < 7:
+            if i < 2:
+                print(f"[DEBUG] ⚠️  Linha {i+1} ignorada (menos de 7 colunas)")
             continue
 
         # Extrair link (primeira coluna geralmente tem um <a>)
@@ -85,6 +105,7 @@ def parse_lista(html: str, tipo_codigo: str) -> list[dict]:
 
         instrumentos.append(instrumento)
 
+    print(f"[DEBUG] ✅ Total de instrumentos extraídos: {len(instrumentos)}")
     return instrumentos
 
 
@@ -207,9 +228,19 @@ def worker_playwright(uf: str, tipo_codigo: str) -> None:
             while True:
                 # Capturar HTML da página atual
                 html = page.content()
-                instrumentos = parse_lista(html, tipo_codigo)
+                current_url = page.url
+                print(f"[DEBUG] 📍 URL atual: {current_url}")
+
+                # Ativar debug na primeira página para salvar HTML se não encontrar resultados
+                instrumentos = parse_lista(html, tipo_codigo, debug_save=(pagina == 1))
 
                 if not instrumentos:
+                    if pagina == 1:
+                        # Salvar HTML para análise
+                        debug_file = DATA_ROOT.parent / f"debug_{uf}_{tipo_nome}_empty.html"
+                        ensure_dir(DATA_ROOT.parent)
+                        debug_file.write_text(html, encoding="utf-8")
+                        print(f"[{human_time()}] 💾 HTML de resultado vazio salvo em: {debug_file}")
                     print(f"[{human_time()}] 🏁 {uf}-{tipo_nome} finalizado ({total_instrumentos} instrumentos)")
                     break
 
