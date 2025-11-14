@@ -20,7 +20,11 @@ with sync_playwright() as p:
     page.goto('https://www3.mte.gov.br/sistemas/mediador/ConsultarInstColetivo',
               wait_until='domcontentloaded',  # Não espera todos os recursos
               timeout=120000)
-    page.wait_for_timeout(3000)
+
+    print("⏳ Esperando formulário carregar...")
+    # Esperar o campo UF ficar visível e habilitado
+    page.wait_for_selector('#uf', state='visible', timeout=120000)
+    page.wait_for_timeout(2000)  # Espera adicional para JS terminar
 
     print("📝 Preenchendo formulário (AC, ACT, 2025)...")
     page.select_option('#uf', 'AC')
