@@ -42,68 +42,133 @@ def ensure_dir(path: Path) -> None:
 def parse_lista(html: str, tipo_codigo: str, debug_save=False) -> list[dict]:
     """
     Parseia HTML da página de listagem e extrai instrumentos.
+
+    ESTRUTURA DO SITE:
+    <div id="grdInstrumentos">
+      <table class="Dados Tb01">
+        <tr indice="MR063207/2023">
+          <td><div><table class="TbForm">
+            <!-- Dados aninhados aqui -->
+          </table></div></td>
+        </tr>
+      </table>
+    </div>
     """
+    import re
     soup = BeautifulSoup(html, "lxml")
 
-    # DEBUG: Contar quantas tabelas existem
-    all_tables = soup.find_all("table")
-
-    # Encontrar tabela de resultados - tentar vários seletores
-    table = (
-        soup.find("table", {"class": "table-striped"}) or
-        soup.find("table", {"class": "table"}) or
-        soup.find("table", {"id": lambda x: x and "grid" in x.lower()}) or
-        soup.find("table", {"id": lambda x: x and "result" in x.lower()}) or
-        (all_tables[-1] if all_tables else None)  # Última tabela (geralmente é a de resultados)
-    )
-
-    if not table:
-        print(f"[DEBUG] ⚠️  Nenhuma tabela encontrada! Total de tables na página: {len(all_tables)}")
-        if debug_save:
-            Path("debug_no_table.html").write_text(html, encoding="utf-8")
-            print(f"[DEBUG] 💾 HTML salvo em: debug_no_table.html")
+    # Encontrar a div com id="grdInstrumentos"
+    grid_div = soup.find("div", {"id": "grdInstrumentos"})
+    if not grid_div:
+        print(f"[DEBUG] ⚠️  Div grdInstrumentos não encontrada!")
         return []
 
-    rows = table.find_all("tr")
-    print(f"[DEBUG] 📊 Tabela encontrada com {len(rows)} linhas (id={table.get('id', 'N/A')}, class={table.get('class', [])})")
+    # Encontrar a tabela principal class="Dados Tb01"
+    main_table = grid_div.find("table", {"class": "Dados Tb01"})
+    if not main_table:
+        print(f"[DEBUG] ⚠️  Tabela 'Dados Tb01' não encontrada!")
+        return []
 
-    # Pular header (primeira linha)
-    data_rows = rows[1:] if len(rows) > 1 else rows
+    # Cada TR com atributo "indice" é um instrumento
+    instrument_rows = main_table.find_all("tr", {"indice": True})
+    print(f"[DEBUG] 📊 Encontrados {len(instrument_rows)} instrumentos na página")
+
     instrumentos = []
 
-    for i, tr in enumerate(data_rows):
-        cols = tr.find_all("td")
+    for i, tr in enumerate(instrument_rows):
+        try:
+            # Atributo indice contém o número da solicitação (MR...)
+            num_solicitacao = tr.get("indice", "")
 
-        # DEBUG: Mostrar primeiras linhas
-        if i < 2:
-            print(f"[DEBUG] Linha {i+1}: {len(cols)} colunas - {[c.get_text(strip=True)[:30] for c in cols[:3]]}")
+            # Dentro do TR, buscar a tabela aninhada TbForm que contém os dados
+            nested_table = tr.find("table", {"class": "TbForm"})
+            if not nested_table:
+                continue
 
-        if len(cols) < 7:
-            if i < 2:
-                print(f"[DEBUG] ⚠️  Linha {i+1} ignorada (menos de 7 colunas)")
+            # Extrair dados das linhas da tabela aninhada
+            data = {}
+            for row in nested_table.find_all("tr"):
+                cells = row.find_all("td")
+                if len(cells) < 2:
+                    continue
+
+                label = cells[0].get_text(strip=True)
+
+                if "Nº do Registro" in label:
+                    # Registro está em tabela aninhada dentro: <table><tr><td>AC000001/2024</td>...
+                    inner_table = cells[1].find("table")
+                    if inner_table:
+                        inner_cells = inner_table.find("tr").find_all("td")
+                        data["registro"] = inner_cells[0].get_text(strip=True) if inner_cells else ""
+                        data["solicitacao"] = inner_cells[2].get_text(strip=True) if len(inner_cells) > 2 else num_solicitacao
+
+                elif "Tipo do Instrumento" in label:
+                    # Tipo e Vigência em tabela aninhada
+                    inner_table = cells[1].find("table")
+                    if inner_table:
+                        inner_cells = inner_table.find("tr").find_all("td")
+                        data["tipo"] = inner_cells[0].get_text(strip=True) if inner_cells else ""
+                        # Vigência: "01/09/2023 - 31/08/2025"
+                        vigencia_text = inner_cells[2].get_text(strip=True) if len(inner_cells) > 2 else ""
+                        # Remover "*VIGÊNCIA EXPIRADA" se existir
+                        vigencia_text = re.sub(r'\*VIGÊNCIA.*', '', vigencia_text).strip()
+                        if " - " in vigencia_text:
+                            parts = vigencia_text.split(" - ")
+                            data["vigencia_inicio"] = parts[0].strip()
+                            data["vigencia_fim"] = parts[1].strip()
+                        else:
+                            data["vigencia_inicio"] = vigencia_text
+                            data["vigencia_fim"] = ""
+
+                elif "Partes" in label:
+                    # Partes são separadas por <br>
+                    partes_html = cells[1]
+                    # Pegar todo o texto e separar por quebras
+                    partes_text = partes_html.get_text(separator="|", strip=True)
+                    data["partes"] = partes_text.replace("|", " / ")
+
+                # Procurar link de download: onclick="fDownload('MR063207/2023','76535764032770')"
+                download_link = row.find("a", {"onclick": lambda x: x and "fDownload" in x})
+                if download_link:
+                    onclick = download_link.get("onclick", "")
+                    # Extrair os parâmetros: fDownload('MR063207/2023','76535764032770')
+                    match = re.search(r"fDownload\('([^']+)','([^']+)'\)", onclick)
+                    if match:
+                        solicitacao_id = match.group(1)
+                        cnpj_hash = match.group(2)
+                        # Construir URL de download (preciso descobrir o padrão correto)
+                        # Por enquanto guardar os IDs
+                        data["download_solicitacao"] = solicitacao_id
+                        data["download_cnpj_hash"] = cnpj_hash
+
+            # Montar instrumento
+            instrumento = {
+                "id_mediador": data.get("registro", ""),
+                "num_solicitacao": data.get("solicitacao", num_solicitacao),
+                "tipo": data.get("tipo", TIPOS.get(tipo_codigo, "DESCONHECIDO")),
+                "tipo_simplificado": TIPOS.get(tipo_codigo, "DESCONHECIDO"),
+                "data_registro": "",  # Não vi data de registro explícita
+                "data_assinatura": "",  # Não vi data de assinatura explícita
+                "vigencia_inicio": data.get("vigencia_inicio", ""),
+                "vigencia_fim": data.get("vigencia_fim", ""),
+                "partes": data.get("partes", ""),
+                "link_pdf": None,  # Será construído depois com os IDs de download
+                "download_ids": {
+                    "solicitacao": data.get("download_solicitacao", ""),
+                    "cnpj_hash": data.get("download_cnpj_hash", "")
+                }
+            }
+
+            if instrumento["id_mediador"]:  # Só adicionar se tiver registro
+                instrumentos.append(instrumento)
+
+                # DEBUG: Mostrar primeiros 2
+                if i < 2:
+                    print(f"[DEBUG] Instrumento {i+1}: {instrumento['id_mediador']} | {instrumento['tipo']} | {instrumento['vigencia_inicio']}")
+
+        except Exception as e:
+            print(f"[DEBUG] ⚠️  Erro ao processar instrumento {i+1}: {e}")
             continue
-
-        # Extrair link (primeira coluna geralmente tem um <a>)
-        a_tag = cols[0].find("a")
-        link_pdf = a_tag.get("href") if a_tag else None
-
-        # Se link for relativo, completar
-        if link_pdf and link_pdf.startswith("/"):
-            link_pdf = "https://www3.mte.gov.br" + link_pdf
-
-        # Construir dict com metadados
-        instrumento = {
-            "id_mediador": cols[0].get_text(strip=True),
-            "tipo": TIPOS.get(tipo_codigo, "DESCONHECIDO"),
-            "data_registro": cols[2].get_text(strip=True) if len(cols) > 2 else "",
-            "data_assinatura": cols[3].get_text(strip=True) if len(cols) > 3 else "",
-            "vigencia_inicio": cols[4].get_text(strip=True) if len(cols) > 4 else "",
-            "vigencia_fim": cols[5].get_text(strip=True) if len(cols) > 5 else "",
-            "partes": cols[6].get_text(strip=True) if len(cols) > 6 else "",
-            "link_pdf": link_pdf
-        }
-
-        instrumentos.append(instrumento)
 
     print(f"[DEBUG] ✅ Total de instrumentos extraídos: {len(instrumentos)}")
     return instrumentos
