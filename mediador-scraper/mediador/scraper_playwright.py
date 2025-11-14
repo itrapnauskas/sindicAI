@@ -338,7 +338,7 @@ def worker_playwright(uf: str, tipo_codigo: str) -> None:
                         break
 
                     # Processar cada instrumento
-                    for item in instrumentos:
+                    for idx_item, item in enumerate(instrumentos):
                         meta = {
                             **item,
                             "uf": uf,
@@ -347,17 +347,35 @@ def worker_playwright(uf: str, tipo_codigo: str) -> None:
                             "coletado_em": dt.datetime.now().isoformat()
                         }
 
-                        # Baixar PDF (se houver link)
+                        # Baixar PDF clicando no botão de Download
                         pdf_bytes, pdf_hash = None, None
-                        if item["link_pdf"]:
+
+                        # Verificar se temos os IDs de download
+                        download_ids = item.get("download_ids", {})
+                        solicitacao_id = download_ids.get("solicitacao", "")
+                        cnpj_hash = download_ids.get("cnpj_hash", "")
+
+                        if solicitacao_id and cnpj_hash:
                             try:
-                                # Usar browser para baixar (mais confiável contra anti-bot)
-                                pdf_page = context.new_page()
-                                response = pdf_page.goto(item["link_pdf"], timeout=TIMEOUT * 1000)
-                                if response and response.status == 200:
-                                    pdf_bytes = response.body()
+                                # Procurar o botão de download específico para este instrumento
+                                # onclick="fDownload('MR063207/2023','76535764032770')"
+                                onclick_pattern = f"fDownload('{solicitacao_id}','{cnpj_hash}')"
+                                download_button = page.locator(f"a[onclick*=\"{solicitacao_id}\"][onclick*=\"{cnpj_hash}\"]").first
+
+                                if download_button.count() > 0:
+                                    # Clicar e capturar o download
+                                    with page.expect_download(timeout=30000) as download_info:
+                                        download_button.click()
+                                        download = download_info.value
+
+                                    # Ler bytes do PDF
+                                    temp_path = download.path()
+                                    pdf_bytes = Path(temp_path).read_bytes()
                                     pdf_hash = sha256(pdf_bytes)
-                                pdf_page.close()
+                                    print(f"[{human_time()}] ✅ PDF baixado: {item['id_mediador']} ({len(pdf_bytes) / 1024:.1f} KB)")
+                                else:
+                                    print(f"[{human_time()}] ⚠️  Botão de Download não encontrado para {item['id_mediador']}")
+
                             except Exception as e:
                                 print(f"[{human_time()}] ⚠️  Erro ao baixar PDF {item['id_mediador']}: {e}")
 
