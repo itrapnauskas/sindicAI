@@ -43,40 +43,53 @@ def debug_pdf_url():
             page.wait_for_timeout(3000)
             print("✅ Página carregada")
 
-            # Preencher formulário (SEGUINDO A ORDEM CORRETA!)
+            # Preencher formulário (EXATAMENTE como no scraper_playwright.py que funciona)
             print("\n📝 Preenchendo formulário (AC, ACT, 2025)...")
 
-            # 1. UF
-            page.select_option("#cboUFRegistro", "AC")
-            page.wait_for_timeout(300)
+            try:
+                # Selecionar UF de Registro
+                page.select_option("#cboUFRegistro", "AC")
+                print("✅ UF selecionada: AC")
+            except Exception as e:
+                print(f"⚠️  Erro ao selecionar UF: {e}")
 
-            # 2. Tipo
-            page.select_option("#cboTPRequerimento", index=1)  # ACT
-            page.wait_for_timeout(300)
+            try:
+                # Selecionar tipo de instrumento por ÍNDICE
+                page.select_option("#cboTPRequerimento", index=1)  # ACT
+                print("✅ Tipo selecionado: Acordo Coletivo (index 1)")
+            except Exception as e:
+                print(f"⚠️  Erro ao selecionar tipo: {e}")
 
-            # 3. Status de Vigência (OBRIGATÓRIO!)
-            page.select_option("#cboSTVigencia", "2")  # Todos
-            page.wait_for_timeout(300)
+            try:
+                # Calcular datas
+                data_inicio = "01/01/2025"
+                data_fim = "31/12/2025"
 
-            # 4. Marcar checkbox de Período de Registro
-            page.check("#chkPeriodoRegistro")
-            page.wait_for_timeout(500)  # Aguardar JS habilitar campos
+                # Marcar checkbox de Período de Registro
+                page.check("#chkPeriodoRegistro")
+                page.wait_for_timeout(300)
 
-            # 5. Preencher datas de Registro
-            page.fill("#txtDTInicioRegistro", "01/01/2025")
-            page.wait_for_timeout(200)
-            page.fill("#txtDTFimRegistro", "31/12/2025")
-            page.wait_for_timeout(300)
+                # Preencher Período de Registro
+                page.fill("#txtDTInicioRegistro", data_inicio)
+                page.fill("#txtDTFimRegistro", data_fim)
+                print(f"✅ Período de Registro: {data_inicio} até {data_fim}")
 
-            # 6. Marcar checkbox de Vigência
-            page.check("#chkVigencia")
-            page.wait_for_timeout(500)  # Aguardar JS habilitar campos
+                # CAMPO CRÍTICO: Status de Vigência (select obrigatório!)
+                page.select_option("#cboSTVigencia", "2")  # "Todos"
+                print("✅ Status de Vigência: Todos")
 
-            # 7. Preencher datas de Vigência
-            page.fill("#txtDTInicioVigencia", "01/01/2025")
-            page.wait_for_timeout(200)
-            page.fill("#txtDTFimVigencia", "31/12/2025")
-            page.wait_for_timeout(300)
+                # TAMBÉM marcar e preencher Vigência (site exige!)
+                page.check("#chkVigencia")
+                page.wait_for_timeout(300)
+
+                # Preencher Período de Vigência
+                page.fill("#txtDTInicioVigencia", data_inicio)
+                page.fill("#txtDTFimVigencia", data_fim)
+                print(f"✅ Período de Vigência: {data_inicio} até {data_fim}")
+
+            except Exception as e:
+                print(f"⚠️  Erro ao preencher datas: {e}")
+                raise
 
             print("✅ Formulário preenchido")
 
