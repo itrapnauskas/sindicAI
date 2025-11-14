@@ -138,170 +138,192 @@ def worker_playwright(uf: str, tipo_codigo: str) -> None:
     """
     Worker que usa Playwright para scraping.
     Abre um browser, navega no site, preenche formulário e coleta dados.
+
+    IMPORTANTE: Site limita pesquisas a 2 anos!
+    Fazemos loop ANO POR ANO para respeitar esse limite.
     """
     tipo_nome = TIPOS[tipo_codigo]
     print(f"[{human_time()}] 🚀 {uf}-{tipo_nome} iniciado")
+    print(f"[{human_time()}] 📅 Período: {ANO_INICIO} até {ANO_FIM}")
 
-    with sync_playwright() as p:
-        # Lançar browser
-        browser = p.chromium.launch(headless=HEADLESS)
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            viewport={"width": 1920, "height": 1080}
-        )
-        page = context.new_page()
+    total_geral = 0
 
-        try:
-            # Navegar para página de consulta (site pode estar lento)
-            print(f"[{human_time()}] 🌐 Navegando para {BASE_URL}...")
-            page.goto(BASE_URL, wait_until="load", timeout=180000)  # 3 minutos
-            print(f"[{human_time()}] ✅ Página carregada, aguardando estabilização...")
-            page.wait_for_timeout(3000)  # Aguardar JS carregar
+    # Loop ANO POR ANO para respeitar limite de 2 anos do site
+    for ano in range(ANO_INICIO, ANO_FIM + 1):
+        print(f"\n[{human_time()}] {'='*60}")
+        print(f"[{human_time()}] 📆 Coletando ano {ano} - {uf}-{tipo_nome}")
+        print(f"[{human_time()}] {'='*60}")
 
-            # Preencher formulário com seletores corretos do site Mediador
-            # Descobertos via inspect_site.py
-
-            # Mapear tipo_codigo para INDEX no select (mais confiável que label)
-            # Índices descobertos via inspect_site.py:
-            # 0 = "Todos os Tipos"
-            # 1 = "Acordo Coletivo" (ACT)
-            # 2 = "Acordo Coletivo Específico - PPE"
-            # 3 = "Acordo Coletivo Específico - Domingos"
-            # 4 = "Convenção Coletiva" (CCT)
-            tipo_index_map = {
-                "1": 4,  # CCT
-                "2": 1,  # ACT
-                "3": 0   # Todos (para pegar aditivos)
-            }
-            tipo_index = tipo_index_map.get(tipo_codigo, 0)
-            tipo_nomes = {
-                "1": "Convenção Coletiva (CCT)",
-                "2": "Acordo Coletivo (ACT)",
-                "3": "Todos os Tipos (Aditivos)"
-            }
+        with sync_playwright() as p:
+            # Lançar browser
+            browser = p.chromium.launch(headless=HEADLESS)
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                viewport={"width": 1920, "height": 1080}
+            )
+            page = context.new_page()
 
             try:
-                # Selecionar UF de Registro (id correto: cboUFRegistro)
-                page.select_option("#cboUFRegistro", uf)
-                print(f"[{human_time()}] ✅ UF selecionada: {uf}")
-            except Exception as e:
-                print(f"[{human_time()}] ⚠️  Erro ao selecionar UF: {e}")
+                # Navegar para página de consulta (site pode estar lento)
+                print(f"[{human_time()}] 🌐 Navegando para {BASE_URL}...")
+                page.goto(BASE_URL, wait_until="load", timeout=180000)  # 3 minutos
+                print(f"[{human_time()}] ✅ Página carregada, aguardando estabilização...")
+                page.wait_for_timeout(3000)  # Aguardar JS carregar
 
-            try:
-                # Selecionar tipo de instrumento por ÍNDICE (mais confiável)
-                page.select_option("#cboTPRequerimento", index=tipo_index)
-                print(f"[{human_time()}] ✅ Tipo selecionado: {tipo_nomes.get(tipo_codigo, 'Desconhecido')} (index {tipo_index})")
-            except Exception as e:
-                print(f"[{human_time()}] ⚠️  Erro ao selecionar tipo: {e}")
+                # Preencher formulário com seletores corretos do site Mediador
+                # Descobertos via inspect_site.py
 
-            try:
-                # Calcular datas (site limita a 2 anos!)
-                data_inicio = f"01/01/{ANO_INICIO}"
-                data_fim = dt.date.today().strftime("%d/%m/%Y")
+                # Mapear tipo_codigo para INDEX no select (mais confiável que label)
+                # Índices descobertos via inspect_site.py:
+                # 0 = "Todos os Tipos"
+                # 1 = "Acordo Coletivo" (ACT)
+                # 2 = "Acordo Coletivo Específico - PPE"
+                # 3 = "Acordo Coletivo Específico - Domingos"
+                # 4 = "Convenção Coletiva" (CCT)
+                tipo_index_map = {
+                    "1": 4,  # CCT
+                    "2": 1,  # ACT
+                    "3": 0   # Todos (para pegar aditivos)
+                }
+                tipo_index = tipo_index_map.get(tipo_codigo, 0)
+                tipo_nomes = {
+                    "1": "Convenção Coletiva (CCT)",
+                    "2": "Acordo Coletivo (ACT)",
+                    "3": "Todos os Tipos (Aditivos)"
+                }
 
-                # Marcar checkbox de Período de Registro
-                page.check("#chkPeriodoRegistro")
-                page.wait_for_timeout(300)
-
-                # Preencher Período de Registro
-                page.fill("#txtDTInicioRegistro", data_inicio)
-                page.fill("#txtDTFimRegistro", data_fim)
-                print(f"[{human_time()}] ✅ Período de Registro: {data_inicio} até {data_fim}")
-
-                # TAMBÉM marcar e preencher Vigência (site exige!)
-                page.check("#chkVigencia")
-                page.wait_for_timeout(300)
-
-                # Preencher Período de Vigência
-                page.fill("#txtDTInicioVigencia", data_inicio)
-                page.fill("#txtDTFimVigencia", data_fim)
-                print(f"[{human_time()}] ✅ Período de Vigência: {data_inicio} até {data_fim}")
-
-            except Exception as e:
-                print(f"[{human_time()}] ⚠️  Erro ao preencher datas: {e}")
-
-            # Clicar em pesquisar
-            try:
-                page.click("#btnPesquisar")
-                print(f"[{human_time()}] ✅ Botão Pesquisar clicado")
-                page.wait_for_load_state("networkidle", timeout=TIMEOUT * 1000)
-                time.sleep(2)
-            except Exception as e:
-                print(f"[{human_time()}] ⚠️  Erro ao clicar em pesquisar: {e}")
-                browser.close()
-                return
-
-            pagina = 1
-            total_instrumentos = 0
-
-            while True:
-                # Capturar HTML da página atual
-                html = page.content()
-                current_url = page.url
-                print(f"[DEBUG] 📍 URL atual: {current_url}")
-
-                # Ativar debug na primeira página para salvar HTML se não encontrar resultados
-                instrumentos = parse_lista(html, tipo_codigo, debug_save=(pagina == 1))
-
-                if not instrumentos:
-                    if pagina == 1:
-                        # Salvar HTML para análise
-                        debug_file = DATA_ROOT.parent / f"debug_{uf}_{tipo_nome}_empty.html"
-                        ensure_dir(DATA_ROOT.parent)
-                        debug_file.write_text(html, encoding="utf-8")
-                        print(f"[{human_time()}] 💾 HTML de resultado vazio salvo em: {debug_file}")
-                    print(f"[{human_time()}] 🏁 {uf}-{tipo_nome} finalizado ({total_instrumentos} instrumentos)")
-                    break
-
-                # Processar cada instrumento
-                for item in instrumentos:
-                    meta = {
-                        **item,
-                        "uf": uf,
-                        "ano": item["data_registro"][-4:] if item["data_registro"] else "0000",
-                        "fonte": "MEDIADOR",
-                        "coletado_em": dt.datetime.now().isoformat()
-                    }
-
-                    # Baixar PDF (se houver link)
-                    pdf_bytes, pdf_hash = None, None
-                    if item["link_pdf"]:
-                        try:
-                            # Usar browser para baixar (mais confiável contra anti-bot)
-                            pdf_page = context.new_page()
-                            response = pdf_page.goto(item["link_pdf"], timeout=TIMEOUT * 1000)
-                            if response and response.status == 200:
-                                pdf_bytes = response.body()
-                                pdf_hash = sha256(pdf_bytes)
-                            pdf_page.close()
-                        except Exception as e:
-                            print(f"[{human_time()}] ⚠️  Erro ao baixar PDF {item['id_mediador']}: {e}")
-
-                    # Salvar tudo
-                    salva_instrumento(uf, meta, html.encode("utf-8"), pdf_bytes, pdf_hash)
-                    total_instrumentos += 1
-
-                print(f"[{human_time()}] ✅ {uf}-{tipo_nome} página {pagina} -> {len(instrumentos)} docs (total: {total_instrumentos})")
-
-                # Tentar ir para próxima página
                 try:
-                    # Procurar botão/link de próxima página
-                    next_button = page.locator("a:has-text('Próxima'), a:has-text('Próximo'), button:has-text('Próxima')").first
-                    if next_button.count() > 0:
-                        next_button.click()
-                        page.wait_for_load_state("networkidle", timeout=TIMEOUT * 1000)
-                        time.sleep(RATE_LIMIT)  # Rate limiting
-                        pagina += 1
-                    else:
+                    # Selecionar UF de Registro (id correto: cboUFRegistro)
+                    page.select_option("#cboUFRegistro", uf)
+                    print(f"[{human_time()}] ✅ UF selecionada: {uf}")
+                except Exception as e:
+                    print(f"[{human_time()}] ⚠️  Erro ao selecionar UF: {e}")
+
+                try:
+                    # Selecionar tipo de instrumento por ÍNDICE (mais confiável)
+                    page.select_option("#cboTPRequerimento", index=tipo_index)
+                    print(f"[{human_time()}] ✅ Tipo selecionado: {tipo_nomes.get(tipo_codigo, 'Desconhecido')} (index {tipo_index})")
+                except Exception as e:
+                    print(f"[{human_time()}] ⚠️  Erro ao selecionar tipo: {e}")
+
+                try:
+                    # Calcular datas PARA O ANO ATUAL DO LOOP
+                    # Site limita a 2 anos, então fazemos 01/01/YYYY até 31/12/YYYY (1 ano por vez)
+                    data_inicio = f"01/01/{ano}"
+                    data_fim = f"31/12/{ano}"
+
+                    # Marcar checkbox de Período de Registro
+                    page.check("#chkPeriodoRegistro")
+                    page.wait_for_timeout(300)
+
+                    # Preencher Período de Registro
+                    page.fill("#txtDTInicioRegistro", data_inicio)
+                    page.fill("#txtDTFimRegistro", data_fim)
+                    print(f"[{human_time()}] ✅ Período de Registro: {data_inicio} até {data_fim}")
+
+                    # TAMBÉM marcar e preencher Vigência (site exige!)
+                    page.check("#chkVigencia")
+                    page.wait_for_timeout(300)
+
+                    # Preencher Período de Vigência
+                    page.fill("#txtDTInicioVigencia", data_inicio)
+                    page.fill("#txtDTFimVigencia", data_fim)
+                    print(f"[{human_time()}] ✅ Período de Vigência: {data_inicio} até {data_fim}")
+
+                except Exception as e:
+                    print(f"[{human_time()}] ⚠️  Erro ao preencher datas: {e}")
+
+                # Clicar em pesquisar
+                try:
+                    page.click("#btnPesquisar")
+                    print(f"[{human_time()}] ✅ Botão Pesquisar clicado")
+                    page.wait_for_load_state("networkidle", timeout=TIMEOUT * 1000)
+                    time.sleep(2)
+                except Exception as e:
+                    print(f"[{human_time()}] ⚠️  Erro ao clicar em pesquisar: {e}")
+                    browser.close()
+                    continue  # Próximo ano
+
+                pagina = 1
+                total_instrumentos_ano = 0
+
+                while True:
+                    # Capturar HTML da página atual
+                    html = page.content()
+                    current_url = page.url
+                    print(f"[DEBUG] 📍 URL atual: {current_url}")
+
+                    # Ativar debug na primeira página para salvar HTML se não encontrar resultados
+                    instrumentos = parse_lista(html, tipo_codigo, debug_save=(pagina == 1 and ano == ANO_INICIO))
+
+                    if not instrumentos:
+                        if pagina == 1:
+                            print(f"[{human_time()}] ℹ️  Nenhum resultado para {uf}-{tipo_nome} em {ano}")
+                            # Salvar HTML apenas no primeiro ano para debug
+                            if ano == ANO_INICIO:
+                                debug_file = DATA_ROOT.parent / f"debug_{uf}_{tipo_nome}_{ano}_empty.html"
+                                ensure_dir(DATA_ROOT.parent)
+                                debug_file.write_text(html, encoding="utf-8")
+                                print(f"[{human_time()}] 💾 HTML de resultado vazio salvo em: {debug_file}")
                         break
-                except Exception:
-                    break
 
-        except Exception as e:
-            print(f"[{human_time()}] ❌ {uf}-{tipo_nome} ERRO FATAL: {e}")
+                    # Processar cada instrumento
+                    for item in instrumentos:
+                        meta = {
+                            **item,
+                            "uf": uf,
+                            "ano": item["data_registro"][-4:] if item["data_registro"] else str(ano),
+                            "fonte": "MEDIADOR",
+                            "coletado_em": dt.datetime.now().isoformat()
+                        }
 
-        finally:
-            browser.close()
+                        # Baixar PDF (se houver link)
+                        pdf_bytes, pdf_hash = None, None
+                        if item["link_pdf"]:
+                            try:
+                                # Usar browser para baixar (mais confiável contra anti-bot)
+                                pdf_page = context.new_page()
+                                response = pdf_page.goto(item["link_pdf"], timeout=TIMEOUT * 1000)
+                                if response and response.status == 200:
+                                    pdf_bytes = response.body()
+                                    pdf_hash = sha256(pdf_bytes)
+                                pdf_page.close()
+                            except Exception as e:
+                                print(f"[{human_time()}] ⚠️  Erro ao baixar PDF {item['id_mediador']}: {e}")
+
+                        # Salvar tudo
+                        salva_instrumento(uf, meta, html.encode("utf-8"), pdf_bytes, pdf_hash)
+                        total_instrumentos_ano += 1
+                        total_geral += 1
+
+                    print(f"[{human_time()}] ✅ {uf}-{tipo_nome}-{ano} página {pagina} -> {len(instrumentos)} docs (ano: {total_instrumentos_ano}, total: {total_geral})")
+
+                    # Tentar ir para próxima página
+                    try:
+                        # Procurar botão/link de próxima página
+                        next_button = page.locator("a:has-text('Próxima'), a:has-text('Próximo'), button:has-text('Próxima')").first
+                        if next_button.count() > 0:
+                            next_button.click()
+                            page.wait_for_load_state("networkidle", timeout=TIMEOUT * 1000)
+                            time.sleep(RATE_LIMIT)  # Rate limiting
+                            pagina += 1
+                        else:
+                            break
+                    except Exception:
+                        break
+
+                print(f"[{human_time()}] ✅ Ano {ano} concluído: {total_instrumentos_ano} instrumentos")
+
+            except Exception as e:
+                print(f"[{human_time()}] ❌ {uf}-{tipo_nome}-{ano} ERRO FATAL: {e}")
+
+            finally:
+                browser.close()
+
+        # Pequeno delay entre anos para não sobrecarregar o site
+        time.sleep(2)
+
+    print(f"\n[{human_time()}] 🏁 {uf}-{tipo_nome} FINALIZADO - Total: {total_geral} instrumentos coletados")
 
 
 def main():
