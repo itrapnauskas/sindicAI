@@ -16,10 +16,11 @@ def debug_pdf_url():
     print("="*60)
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)  # Rodar em background!
+        browser = p.chromium.launch(headless=True)  # Voltando para headless
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            viewport={"width": 1920, "height": 1080}
+            viewport={"width": 1920, "height": 1080},
+            ignore_https_errors=True  # Ignorar erros de certificado SSL
         )
         page = context.new_page()
 
@@ -43,67 +44,37 @@ def debug_pdf_url():
             page.wait_for_timeout(3000)
             print("✅ Página carregada")
 
-            # Preencher formulário (EXATAMENTE como no scraper_playwright.py que funciona)
+            # Preencher formulário (usando clicks reais para JavaScript executar)
             print("\n📝 Preenchendo formulário (AC, ACT, 2025)...")
 
-            try:
-                # Selecionar UF de Registro
-                page.select_option("#cboUFRegistro", "AC")
-                print("✅ UF selecionada: AC")
-            except Exception as e:
-                print(f"⚠️  Erro ao selecionar UF: {e}")
+            # Selecionar UF de Registro
+            page.select_option("#cboUFRegistro", "AC")
+            print("✅ UF selecionada: AC")
 
-            try:
-                # Selecionar tipo de instrumento por ÍNDICE
-                page.select_option("#cboTPRequerimento", index=1)  # ACT
-                print("✅ Tipo selecionado: Acordo Coletivo (index 1)")
-            except Exception as e:
-                print(f"⚠️  Erro ao selecionar tipo: {e}")
+            # Selecionar tipo de instrumento
+            page.select_option("#cboTPRequerimento", index=1)  # ACT
+            print("✅ Tipo selecionado: Acordo Coletivo (index 1)")
 
-            try:
-                # Calcular datas
-                data_inicio = "01/01/2025"
-                data_fim = "31/12/2025"
+            # Status de Vigência
+            page.select_option("#cboSTVigencia", "2")  # Todos
+            print("✅ Status de Vigência: Todos")
 
-                # FORÇAR PREENCHIMENTO VIA JAVASCRIPT (contornar readonly em headless)
-                print("⚡ Forçando preenchimento via JavaScript...")
+            # CLICAR nos checkboxes para ativar JavaScript do site
+            print("\n📅 Ativando campos de data...")
 
-                page.evaluate("""
-                    // Marcar checkbox de Registro
-                    document.querySelector('#chkPeriodoRegistro').checked = true;
+            # Período de Registro
+            page.click("#chkPeriodoRegistro")
+            page.wait_for_timeout(500)  # Aguardar JavaScript ativar campos
+            page.fill("#txtDTInicioRegistro", "01/01/2025")
+            page.fill("#txtDTFimRegistro", "31/12/2025")
+            print("✅ Período de Registro: 01/01/2025 até 31/12/2025")
 
-                    // Remover readonly e preencher datas de Registro
-                    document.querySelector('#txtDTInicioRegistro').removeAttribute('readonly');
-                    document.querySelector('#txtDTInicioRegistro').classList.remove('ReadOnly');
-                    document.querySelector('#txtDTInicioRegistro').value = '01/01/2025';
-
-                    document.querySelector('#txtDTFimRegistro').removeAttribute('readonly');
-                    document.querySelector('#txtDTFimRegistro').classList.remove('ReadOnly');
-                    document.querySelector('#txtDTFimRegistro').value = '31/12/2025';
-
-                    // Status de Vigência
-                    document.querySelector('#cboSTVigencia').value = '2';
-
-                    // Marcar checkbox de Vigência
-                    document.querySelector('#chkVigencia').checked = true;
-
-                    // Remover readonly e preencher datas de Vigência
-                    document.querySelector('#txtDTInicioVigencia').removeAttribute('readonly');
-                    document.querySelector('#txtDTInicioVigencia').classList.remove('ReadOnly');
-                    document.querySelector('#txtDTInicioVigencia').value = '01/01/2025';
-
-                    document.querySelector('#txtDTFimVigencia').removeAttribute('readonly');
-                    document.querySelector('#txtDTFimVigencia').classList.remove('ReadOnly');
-                    document.querySelector('#txtDTFimVigencia').value = '31/12/2025';
-                """)
-
-                print(f"✅ Período de Registro: {data_inicio} até {data_fim}")
-                print("✅ Status de Vigência: Todos")
-                print(f"✅ Período de Vigência: {data_inicio} até {data_fim}")
-
-            except Exception as e:
-                print(f"⚠️  Erro ao preencher datas: {e}")
-                raise
+            # Período de Vigência
+            page.click("#chkVigencia")
+            page.wait_for_timeout(500)  # Aguardar JavaScript ativar campos
+            page.fill("#txtDTInicioVigencia", "01/01/2025")
+            page.fill("#txtDTFimVigencia", "31/12/2025")
+            print("✅ Período de Vigência: 01/01/2025 até 31/12/2025")
 
             print("✅ Formulário preenchido")
 
