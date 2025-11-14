@@ -3,6 +3,7 @@ Configurações do Mediador Scraper
 """
 from pathlib import Path
 import os
+import datetime as dt
 from dotenv import load_dotenv
 
 # Carregar variáveis de ambiente do .env se existir
@@ -34,8 +35,10 @@ MAX_WORKERS = int(os.getenv("MAX_WORKERS", "8"))
 RATE_LIMIT = float(os.getenv("RATE_LIMIT", "1.0"))  # segundos entre requests
 
 # Período de coleta
-DATA_INICIO = os.getenv("DATA_INICIO", "01/01/2010")
-# DATA_FIM é sempre a data atual (calculada dinamicamente no scraper)
+# IMPORTANTE: O site limita pesquisas a 2 anos!
+# Vamos coletar ano por ano para respeitar esse limite
+ANO_INICIO = int(os.getenv("ANO_INICIO", "2020"))  # Ano inicial da coleta
+ANO_FIM = dt.datetime.now().year  # Ano atual
 
 # Configurações de retry
 MAX_RETRIES = 3
