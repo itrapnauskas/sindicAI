@@ -16,7 +16,7 @@ def debug_pdf_url():
     print("="*60)
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)  # Deixar visível
+        browser = p.chromium.launch(headless=True)  # Rodar em background!
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             viewport={"width": 1920, "height": 1080}
@@ -142,16 +142,10 @@ def debug_pdf_url():
                 for url in pdf_requests:
                     print(f"   {url}")
 
-            print("\n⏸️  Deixando browser aberto para você ver...")
-            print("   Pressione Enter para fechar...")
-            input()
-
         except Exception as e:
             print(f"\n❌ ERRO: {e}")
             import traceback
             traceback.print_exc()
-            print("\n⏸️  Pressione Enter para fechar...")
-            input()
 
         finally:
             browser.close()
