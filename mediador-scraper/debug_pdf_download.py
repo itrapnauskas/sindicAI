@@ -43,19 +43,41 @@ def debug_pdf_url():
             page.wait_for_timeout(3000)
             print("✅ Página carregada")
 
-            # Preencher formulário rapidinho
+            # Preencher formulário (SEGUINDO A ORDEM CORRETA!)
             print("\n📝 Preenchendo formulário (AC, ACT, 2025)...")
+
+            # 1. UF
             page.select_option("#cboUFRegistro", "AC")
+            page.wait_for_timeout(300)
+
+            # 2. Tipo
             page.select_option("#cboTPRequerimento", index=1)  # ACT
-            page.select_option("#cboSTVigencia", "2")
+            page.wait_for_timeout(300)
+
+            # 3. Status de Vigência (OBRIGATÓRIO!)
+            page.select_option("#cboSTVigencia", "2")  # Todos
+            page.wait_for_timeout(300)
+
+            # 4. Marcar checkbox de Período de Registro
             page.check("#chkPeriodoRegistro")
-            page.wait_for_timeout(300)
+            page.wait_for_timeout(500)  # Aguardar JS habilitar campos
+
+            # 5. Preencher datas de Registro
             page.fill("#txtDTInicioRegistro", "01/01/2025")
+            page.wait_for_timeout(200)
             page.fill("#txtDTFimRegistro", "31/12/2025")
-            page.check("#chkVigencia")
             page.wait_for_timeout(300)
+
+            # 6. Marcar checkbox de Vigência
+            page.check("#chkVigencia")
+            page.wait_for_timeout(500)  # Aguardar JS habilitar campos
+
+            # 7. Preencher datas de Vigência
             page.fill("#txtDTInicioVigencia", "01/01/2025")
+            page.wait_for_timeout(200)
             page.fill("#txtDTFimVigencia", "31/12/2025")
+            page.wait_for_timeout(300)
+
             print("✅ Formulário preenchido")
 
             # Pesquisar
