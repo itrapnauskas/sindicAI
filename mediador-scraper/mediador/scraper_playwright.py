@@ -359,8 +359,9 @@ def worker_playwright(uf: str, tipo_codigo: str) -> None:
                             try:
                                 # Procurar o botão de download específico para este instrumento
                                 # onclick="fDownload('MR063207/2023','76535764032770')"
+                                # IMPORTANTE: Garantir que é o botão fDownload, não o Visualizar!
                                 onclick_pattern = f"fDownload('{solicitacao_id}','{cnpj_hash}')"
-                                download_button = page.locator(f"a[onclick*=\"{solicitacao_id}\"][onclick*=\"{cnpj_hash}\"]").first
+                                download_button = page.locator(f"a[onclick*=\"fDownload\"][onclick*=\"{solicitacao_id}\"]").first
 
                                 if download_button.count() > 0:
                                     # Clicar e capturar o download
