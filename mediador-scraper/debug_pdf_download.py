@@ -89,17 +89,33 @@ def debug_pdf_url():
 
             # Procurar PRIMEIRO link de download na página
             print("\n🎯 Procurando primeiro link de Download...")
-            download_links = page.locator("a:has-text('Download')").all()
 
-            if not download_links:
+            # PRIMEIRO: Salvar HTML para debug
+            html = page.content()
+            html_path = Path(__file__).parent / "debug_download_page.html"
+            html_path.write_text(html, encoding="utf-8")
+            print(f"💾 HTML salvo em: {html_path}")
+
+            # Contar quantos links com texto "Download" existem
+            download_links = page.locator("a:has-text('Download')").all()
+            print(f"📊 Links com 'Download': {len(download_links)}")
+
+            # Tentar também por onclick
+            onclick_links = page.locator("a[onclick*='fDownload']").all()
+            print(f"📊 Links com onclick='fDownload': {len(onclick_links)}")
+
+            if not download_links and not onclick_links:
                 print("❌ Nenhum link de Download encontrado!")
-                input("Pressione Enter para fechar...")
+                print(f"📋 Verifique o HTML em: {html_path}")
                 return
 
-            print(f"✅ Encontrados {len(download_links)} links de Download")
+            # Usar onclick_links se download_links estiver vazio
+            links_to_use = download_links if download_links else onclick_links
+
+            print(f"✅ Usando {len(links_to_use)} links encontrados")
 
             # Pegar o primeiro
-            first_link = download_links[0]
+            first_link = links_to_use[0]
             onclick_attr = first_link.get_attribute("onclick")
             print(f"\n📋 Atributo onclick do primeiro link:")
             print(f"   {onclick_attr}")
