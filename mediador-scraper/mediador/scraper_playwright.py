@@ -221,6 +221,11 @@ def worker_playwright(uf: str, tipo_codigo: str) -> None:
                     page.fill("#txtDTFimRegistro", data_fim)
                     print(f"[{human_time()}] ✅ Período de Registro: {data_inicio} até {data_fim}")
 
+                    # CAMPO CRÍTICO: Status de Vigência (select obrigatório!)
+                    # Opções: "" (vazio/erro), "2" (Todos), "1" (Vigentes), "0" (Não Vigentes)
+                    page.select_option("#cboSTVigencia", "2")  # "Todos"
+                    print(f"[{human_time()}] ✅ Status de Vigência: Todos")
+
                     # TAMBÉM marcar e preencher Vigência (site exige!)
                     page.check("#chkVigencia")
                     page.wait_for_timeout(300)
