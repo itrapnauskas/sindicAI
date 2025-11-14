@@ -18,62 +18,74 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 }
 
-def obter_link_pdf(num_solicitacao: str) -> str | None:
+def obter_link_pdf(num_solicitacao: str, debug=False) -> str | None:
     """
     Acessa página de resumo e extrai link do PDF
 
-    IMPORTANTE: num_solicitacao pode conter '/' que precisa ser URL encoded!
+    Testa múltiplas variações de URL até encontrar a correta
     """
-    # URL encode do num_solicitacao (MR031724/2025 -> MR031724%2F2025)
-    num_encoded = quote(num_solicitacao, safe='')
-
-    url_resumo = f"{BASE_URL}/Resumo/ResumoVisualiza?nrSolicitacao={num_encoded}"
+    # Testar diferentes formatos de URL
+    urls_to_try = [
+        # Formato 1: Com encoding
+        f"{BASE_URL}/Resumo/ResumoVisualiza?nrSolicitacao={quote(num_solicitacao, safe='')}",
+        # Formato 2: Sem encoding (como dev faz)
+        f"{BASE_URL}/Resumo/ResumoVisualiza?nrSolicitacao={num_solicitacao}",
+        # Formato 3: Path param ao invés de query
+        f"{BASE_URL}/Resumo/ResumoVisualiza/{num_solicitacao}",
+        # Formato 4: Outro endpoint possível
+        f"{BASE_URL}/ResumoVisualiza?nrSolicitacao={num_solicitacao}",
+    ]
 
     print(f"\n🔍 Acessando resumo: {num_solicitacao}")
-    print(f"   URL: {url_resumo}")
 
-    try:
-        session = requests.Session()
-        session.headers.update(HEADERS)
+    session = requests.Session()
+    session.headers.update(HEADERS)
 
-        r = session.get(url_resumo, timeout=30)
-        print(f"   Status: {r.status_code}")
+    for i, url_resumo in enumerate(urls_to_try, 1):
+        try:
+            print(f"   Tentativa {i}/{len(urls_to_try)}: {url_resumo}")
+            r = session.get(url_resumo, timeout=30)
+            print(f"   Status: {r.status_code}")
 
-        if r.status_code != 200:
-            print(f"   ❌ Erro ao acessar resumo")
-            return None
+            if r.status_code == 200:
+                soup = BeautifulSoup(r.text, 'html.parser')
 
-        soup = BeautifulSoup(r.text, 'html.parser')
+                # Procurar link com texto "Anexo (PDF)" ou contendo "imagemAnexo"
+                # Método 1: Por texto
+                link = soup.find('a', href=True, string=lambda s: s and 'PDF' in s.upper())
 
-        # Procurar link com texto "Anexo (PDF)" ou contendo "imagemAnexo"
-        # Método 1: Por texto
-        link = soup.find('a', href=True, string=lambda s: s and 'PDF' in s.upper())
+                if not link:
+                    # Método 2: Por href contendo imagemAnexo
+                    link = soup.find('a', href=lambda h: h and 'imagemAnexo' in h)
 
-        if not link:
-            # Método 2: Por href contendo imagemAnexo
-            link = soup.find('a', href=lambda h: h and 'imagemAnexo' in h)
+                if link:
+                    href = link['href']
+                    # Se for relativo, completar
+                    if href.startswith('http'):
+                        pdf_url = href
+                    else:
+                        pdf_url = f"https://www3.mte.gov.br{href}"
 
-        if link:
-            href = link['href']
-            # Se for relativo, completar
-            if href.startswith('http'):
-                pdf_url = href
+                    print(f"   ✅ PDF encontrado: {pdf_url}")
+                    return pdf_url
+                else:
+                    print(f"   ⚠️  Link do PDF não encontrado no HTML")
+                    # Salvar HTML para debug apenas no primeiro 200
+                    debug_file = Path(f"debug_resumo_{num_solicitacao.replace('/', '_')}.html")
+                    debug_file.write_text(r.text, encoding='utf-8')
+                    print(f"   💾 HTML salvo em: {debug_file}")
+                    # Continuar tentando outras URLs
             else:
-                pdf_url = f"https://www3.mte.gov.br{href}"
+                # Não é 200, tentar próxima URL
+                continue
 
-            print(f"   ✅ PDF encontrado: {pdf_url}")
-            return pdf_url
-        else:
-            print(f"   ⚠️  Link do PDF não encontrado no HTML")
-            # Salvar HTML para debug
-            debug_file = Path(f"debug_resumo_{num_solicitacao.replace('/', '_')}.html")
-            debug_file.write_text(r.text, encoding='utf-8')
-            print(f"   💾 HTML salvo em: {debug_file}")
-            return None
+        except Exception as e:
+            print(f"   ⚠️  Erro: {e}")
+            continue
 
-    except Exception as e:
-        print(f"   ❌ Erro: {e}")
-        return None
+    # Nenhuma URL funcionou
+    print(f"   ❌ Nenhuma URL de resumo funcionou")
+    return None
 
 # Ler metadados existentes
 data_root = Path("data/raw/mediador")
