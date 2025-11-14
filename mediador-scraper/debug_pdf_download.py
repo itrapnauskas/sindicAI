@@ -65,26 +65,40 @@ def debug_pdf_url():
                 data_inicio = "01/01/2025"
                 data_fim = "31/12/2025"
 
-                # Marcar checkbox de Período de Registro
-                page.check("#chkPeriodoRegistro")
-                page.wait_for_timeout(300)
+                # FORÇAR PREENCHIMENTO VIA JAVASCRIPT (contornar readonly em headless)
+                print("⚡ Forçando preenchimento via JavaScript...")
 
-                # Preencher Período de Registro
-                page.fill("#txtDTInicioRegistro", data_inicio)
-                page.fill("#txtDTFimRegistro", data_fim)
+                page.evaluate("""
+                    // Marcar checkbox de Registro
+                    document.querySelector('#chkPeriodoRegistro').checked = true;
+
+                    // Remover readonly e preencher datas de Registro
+                    document.querySelector('#txtDTInicioRegistro').removeAttribute('readonly');
+                    document.querySelector('#txtDTInicioRegistro').classList.remove('ReadOnly');
+                    document.querySelector('#txtDTInicioRegistro').value = '01/01/2025';
+
+                    document.querySelector('#txtDTFimRegistro').removeAttribute('readonly');
+                    document.querySelector('#txtDTFimRegistro').classList.remove('ReadOnly');
+                    document.querySelector('#txtDTFimRegistro').value = '31/12/2025';
+
+                    // Status de Vigência
+                    document.querySelector('#cboSTVigencia').value = '2';
+
+                    // Marcar checkbox de Vigência
+                    document.querySelector('#chkVigencia').checked = true;
+
+                    // Remover readonly e preencher datas de Vigência
+                    document.querySelector('#txtDTInicioVigencia').removeAttribute('readonly');
+                    document.querySelector('#txtDTInicioVigencia').classList.remove('ReadOnly');
+                    document.querySelector('#txtDTInicioVigencia').value = '01/01/2025';
+
+                    document.querySelector('#txtDTFimVigencia').removeAttribute('readonly');
+                    document.querySelector('#txtDTFimVigencia').classList.remove('ReadOnly');
+                    document.querySelector('#txtDTFimVigencia').value = '31/12/2025';
+                """)
+
                 print(f"✅ Período de Registro: {data_inicio} até {data_fim}")
-
-                # CAMPO CRÍTICO: Status de Vigência (select obrigatório!)
-                page.select_option("#cboSTVigencia", "2")  # "Todos"
                 print("✅ Status de Vigência: Todos")
-
-                # TAMBÉM marcar e preencher Vigência (site exige!)
-                page.check("#chkVigencia")
-                page.wait_for_timeout(300)
-
-                # Preencher Período de Vigência
-                page.fill("#txtDTInicioVigencia", data_inicio)
-                page.fill("#txtDTFimVigencia", data_fim)
                 print(f"✅ Período de Vigência: {data_inicio} até {data_fim}")
 
             except Exception as e:
