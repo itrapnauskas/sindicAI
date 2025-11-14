@@ -4,6 +4,7 @@ Intercepta a URL do PDF quando clicar no botão fDownload
 """
 
 from playwright.sync_api import sync_playwright
+from pathlib import Path
 import time
 
 print("🔍 INTERCEPTANDO URL DO PDF")
@@ -32,7 +33,11 @@ def handle_response(response):
 with sync_playwright() as p:
     # Usar headless=False para ver o que acontece
     browser = p.chromium.launch(headless=False)
-    page = browser.new_page()
+    context = browser.new_context(
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        viewport={"width": 1920, "height": 1080}
+    )
+    page = context.new_page()
     page.set_default_timeout(120000)
 
     # Registrar handlers
@@ -44,21 +49,34 @@ with sync_playwright() as p:
               wait_until='domcontentloaded',
               timeout=120000)
 
-    print("⏳ Esperando formulário...")
-    page.wait_for_timeout(5000)
+    print("⏳ Esperando formulário (10s)...")
+    page.wait_for_timeout(10000)
 
-    # Verificar se campo UF existe
-    if page.locator('#uf').count() == 0:
+    # Procurar por select com opção AC (mais robusto que #uf)
+    print("🔍 Procurando campo de UF...")
+    uf_select = page.locator('select:has(option[value="AC"])').first
+
+    if uf_select.count() == 0:
         print("\n❌ Campo UF não encontrado! Site pode estar fora do ar.")
-        print("🔧 Tentando alternativa: acessar URL direta com parâmetros...")
-
-        # Tentar acessar URL com parâmetros diretos (se existir)
+        print("💾 Salvando HTML para debug...")
+        html = page.content()
+        Path("error_page.html").write_text(html, encoding='utf-8')
+        print("   Salvo em: error_page.html")
         browser.close()
         exit(1)
 
+    # Pegar IDs reais dos campos
+    uf_id = uf_select.get_attribute('id')
+    uf_name = uf_select.get_attribute('name')
+    print(f"✅ Campo UF encontrado: id='{uf_id}' name='{uf_name}'")
+
+    # Procurar campo de tipo
+    tipo_select = page.locator('select:has(option[value="2"])').first
+    tipo_id = tipo_select.get_attribute('id') if tipo_select.count() > 0 else 'tpInstrumento'
+
     print("\n📝 Preenchendo: AC, ACT, 2025...")
-    page.select_option('#uf', 'AC')
-    page.select_option('#tpInstrumento', '2')
+    page.select_option(f'#{uf_id}', 'AC')
+    page.select_option(f'#{tipo_id}', '2')
     page.fill('#dtRegistroIni', '01/01/2025')
     page.fill('#dtRegistroFim', '31/12/2025')
 
