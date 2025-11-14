@@ -11,7 +11,11 @@ print("=" * 70)
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=False)
-    page = browser.new_page()
+    context = browser.new_context(
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        viewport={"width": 1920, "height": 1080}
+    )
+    page = context.new_page()
     page.set_default_timeout(120000)
 
     print("\n📡 Acessando Sistema Mediador...")
@@ -22,12 +26,7 @@ with sync_playwright() as p:
     print("⏳ Esperando 10 segundos para página carregar completamente...")
     page.wait_for_timeout(10000)
 
-    # Salvar screenshot
-    screenshot_path = Path("debug_screenshot.png")
-    page.screenshot(path=str(screenshot_path), full_page=True)
-    print(f"📸 Screenshot salvo: {screenshot_path}")
-
-    # Salvar HTML
+    # Salvar HTML (sem screenshot para evitar crash)
     html = page.content()
     html_path = Path("debug_page.html")
     html_path.write_text(html, encoding='utf-8')
@@ -85,7 +84,6 @@ with sync_playwright() as p:
 
 print("\n✅ DEBUG CONCLUÍDO")
 print("\n💡 PRÓXIMOS PASSOS:")
-print("   1. Abra debug_screenshot.png para ver estado visual")
-print("   2. Abra debug_page.html no VS Code")
-print("   3. Procure por 'uf' ou 'UF' no HTML")
-print("   4. Veja os IDs/names dos selects encontrados acima")
+print("   1. Abra debug_page.html no VS Code")
+print("   2. Procure por 'uf' ou 'UF' no HTML")
+print("   3. Veja os IDs/names dos selects encontrados acima")
