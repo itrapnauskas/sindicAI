@@ -13,9 +13,14 @@ with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
     page = browser.new_page()
 
+    # Timeout maior para site lento
+    page.set_default_timeout(120000)  # 120 segundos
+
     print("📡 Acessando Sistema Mediador...")
-    page.goto('https://www3.mte.gov.br/sistemas/mediador/ConsultarInstColetivo')
-    page.wait_for_timeout(2000)
+    page.goto('https://www3.mte.gov.br/sistemas/mediador/ConsultarInstColetivo',
+              wait_until='domcontentloaded',  # Não espera todos os recursos
+              timeout=120000)
+    page.wait_for_timeout(3000)
 
     print("📝 Preenchendo formulário (AC, ACT, 2025)...")
     page.select_option('#uf', 'AC')
