@@ -195,19 +195,28 @@ def worker_playwright(uf: str, tipo_codigo: str) -> None:
                 print(f"[{human_time()}] ⚠️  Erro ao selecionar tipo: {e}")
 
             try:
-                # Marcar checkbox de Período de Registro (necessário para habilitar campos de data!)
-                page.check("#chkPeriodoRegistro")
-                page.wait_for_timeout(500)  # Aguardar campos habilitarem
-                print(f"[{human_time()}] ✅ Checkbox de período marcado")
-
-                # Preencher data inicial de registro
-                page.fill("#txtDTInicioRegistro", DATA_INICIO)
-                print(f"[{human_time()}] ✅ Data início preenchida: {DATA_INICIO}")
-
-                # Preencher data final de registro
+                # Calcular datas (site limita a 2 anos!)
+                data_inicio = f"01/01/{ANO_INICIO}"
                 data_fim = dt.date.today().strftime("%d/%m/%Y")
+
+                # Marcar checkbox de Período de Registro
+                page.check("#chkPeriodoRegistro")
+                page.wait_for_timeout(300)
+
+                # Preencher Período de Registro
+                page.fill("#txtDTInicioRegistro", data_inicio)
                 page.fill("#txtDTFimRegistro", data_fim)
-                print(f"[{human_time()}] ✅ Data fim preenchida: {data_fim}")
+                print(f"[{human_time()}] ✅ Período de Registro: {data_inicio} até {data_fim}")
+
+                # TAMBÉM marcar e preencher Vigência (site exige!)
+                page.check("#chkVigencia")
+                page.wait_for_timeout(300)
+
+                # Preencher Período de Vigência
+                page.fill("#txtDTInicioVigencia", data_inicio)
+                page.fill("#txtDTFimVigencia", data_fim)
+                print(f"[{human_time()}] ✅ Período de Vigência: {data_inicio} até {data_fim}")
+
             except Exception as e:
                 print(f"[{human_time()}] ⚠️  Erro ao preencher datas: {e}")
 
